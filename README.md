@@ -1,11 +1,18 @@
 # Base64
 
-This is an Elm package for encoding and decoding base64 strings.
+This is an Elm package for encoding and decoding Base64 strings.
 
-You can [read more about base64 on Wikipedia][wiki],
-but the main idea is that you can use base64 to encode bytes in plain text.
+You can [read more about Base64 on Wikipedia][wiki],
+but basically you can use Base64 to encode bytes in plain text.
+
+This package allows you to convert bytes to Base64 strings with `Base64.fromBytes`
+and convert a Base64 string to bytes with `Base64.toBytes`.
+
+[View demo](https://danfishgold.github.io/base64-bytes)
 
 ## Usage
+
+    elm install danfishgold/base64-bytes
 
 ### Bytes to Base64
 

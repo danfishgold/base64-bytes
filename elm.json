@@ -1,7 +1,7 @@
 {
     "type": "package",
     "name": "danfishgold/base64-bytes",
-    "summary": "Convert between bytes and base64 strings",
+    "summary": "Convert between Base64 strings and bytes",
     "license": "BSD-3-Clause",
     "version": "1.0.0",
     "exposed-modules": [
