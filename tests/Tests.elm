@@ -182,9 +182,7 @@ bytesFromInt8s =
 
 decodeIntsToString : List Int -> Maybe String
 decodeIntsToString =
-    bytesFromInt8s
-        >> Decode.fromBytes
-        >> Maybe.map String.fromList
+    bytesFromInt8s >> Decode.fromBytes
 
 
 encodeStringToInts : String -> Maybe (List Int)
@@ -193,10 +191,7 @@ encodeStringToInts str =
         bytesToInts bytes =
             D.decode (intsDecoder (Bytes.width bytes)) bytes
     in
-    str
-        |> String.toList
-        |> Encode.toBytes
-        |> Maybe.andThen bytesToInts
+    Encode.toBytes str |> Maybe.andThen bytesToInts
 
 
 intsDecoder : Int -> D.Decoder (List Int)

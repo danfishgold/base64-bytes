@@ -5,22 +5,22 @@ import Bytes exposing (Bytes)
 import Bytes.Decode as Decode
 
 
-fromBytes : Bytes -> Maybe (List Char)
+fromBytes : Bytes -> Maybe String
 fromBytes bytes =
     Decode.decode (decoder (Bytes.width bytes)) bytes
 
 
-decoder : Int -> Decode.Decoder (List Char)
+decoder : Int -> Decode.Decoder String
 decoder width =
     intsDecoder width
         |> Decode.andThen
             (\ints ->
-                case intsToChars ints of
+                case intsToString ints of
                     Nothing ->
                         Decode.fail
 
-                    Just chars ->
-                        Decode.succeed chars
+                    Just string ->
+                        Decode.succeed string
             )
 
 
@@ -42,12 +42,13 @@ intsDecoder width =
         |> Decode.map (Tuple.second >> List.reverse)
 
 
-intsToChars : List Int -> Maybe (List Char)
-intsToChars ints =
+intsToString : List Int -> Maybe String
+intsToString ints =
     ints
         |> tripleMap threeBytesToFourChars
         |> listFromMaybeList
         |> Maybe.map List.concat
+        |> Maybe.map String.fromList
 
 
 {-| Turn three int8s to four characters in b64

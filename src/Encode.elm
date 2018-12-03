@@ -5,22 +5,23 @@ import Bytes exposing (Bytes)
 import Bytes.Encode as Encode
 
 
-toBytes : List Char -> Maybe Bytes
-toBytes chars =
-    Maybe.map Encode.encode (encode chars)
+toBytes : String -> Maybe Bytes
+toBytes string =
+    Maybe.map Encode.encode (encode string)
 
 
-encode : List Char -> Maybe Encode.Encoder
-encode chars =
-    chars
-        |> charsToInts
+encode : String -> Maybe Encode.Encoder
+encode string =
+    string
+        |> stringToInts
         |> Maybe.map (List.map Encode.unsignedInt8)
         |> Maybe.map Encode.sequence
 
 
-charsToInts : List Char -> Maybe (List Int)
-charsToInts chars =
-    chars
+stringToInts : String -> Maybe (List Int)
+stringToInts string =
+    string
+        |> String.toList
         |> quadMap fourCharsToThreeInts
         |> listFromMaybeList
         |> Maybe.map List.concat
