@@ -6,7 +6,8 @@ import Browser.Navigation as Nav
 import Bytes
 import Bytes.Decode
 import Bytes.Encode
-import Html exposing (text, textarea)
+import Html exposing (a, div, span, text, textarea)
+import Html.Attributes exposing (href)
 import Html.Events exposing (onInput)
 import Url exposing (Url)
 
@@ -16,15 +17,12 @@ encodeUrl text =
     Bytes.Encode.string text
         |> Bytes.Encode.encode
         |> Base64.fromBytes
-        |> Maybe.withDefault []
-        |> String.fromList
+        |> Maybe.withDefault ""
 
 
 decodeUrl : String -> String
 decodeUrl url =
-    url
-        |> String.toList
-        |> Base64.toBytes
+    Base64.toBytes url
         |> Maybe.andThen
             (\bytes ->
                 Bytes.Decode.decode
@@ -95,5 +93,18 @@ updateUrl key path text =
 view : Model -> Browser.Document Msg
 view model =
     { title = "B64 Url"
-    , body = [ textarea [ onInput SetText ] [ text model.text ] ]
+    , body =
+        [ div []
+            [ text "Write text here and it will be encoded into "
+            , a [ href "https://en.wikipedia.org/wiki/Base64" ] [ text "Base64" ]
+            , text " in the URL"
+            ]
+        , div []
+            [ text "Load the same URL and the encoded text will be"
+            , text "decoded back into the text field."
+            ]
+        , textarea
+            [ onInput SetText ]
+            [ text model.text ]
+        ]
     }
