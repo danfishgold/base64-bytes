@@ -1,10 +1,9 @@
 module Tests exposing (suite)
 
+import Base64
 import Bytes exposing (Bytes)
 import Bytes.Decode as D
 import Bytes.Encode as E
-import Decode
-import Encode
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer)
 import Regex
@@ -182,7 +181,7 @@ bytesFromInt8s =
 
 decodeIntsToString : List Int -> Maybe String
 decodeIntsToString =
-    bytesFromInt8s >> Decode.fromBytes
+    bytesFromInt8s >> Base64.fromBytes
 
 
 encodeStringToInts : String -> Maybe (List Int)
@@ -191,7 +190,7 @@ encodeStringToInts str =
         bytesToInts bytes =
             D.decode (intsDecoder (Bytes.width bytes)) bytes
     in
-    Encode.toBytes str |> Maybe.andThen bytesToInts
+    Base64.toBytes str |> Maybe.andThen bytesToInts
 
 
 intsDecoder : Int -> D.Decoder (List Int)
