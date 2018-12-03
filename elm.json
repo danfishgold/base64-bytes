@@ -1,0 +1,19 @@
+{
+    "type": "package",
+    "name": "danfishgold/base64-bytes",
+    "summary": "Whatever",
+    "license": "BSD-3-Clause",
+    "version": "1.0.0",
+    "exposed-modules": [
+        "Base64"
+    ],
+    "elm-version": "0.19.0 <= v < 0.20.0",
+    "dependencies": {
+        "elm/bytes": "1.0.7 <= v < 2.0.0",
+        "elm/core": "1.0.2 <= v < 2.0.0"
+    },
+    "test-dependencies": {
+        "elm-explorations/test": "1.2.0 <= v < 2.0.0",
+        "elm/regex": "1.0.0 <= v < 2.0.0"
+    }
+}
