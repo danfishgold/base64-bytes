@@ -1,4 +1,4 @@
-module Encode exposing (encode, toBytes)
+module Encode exposing (encoder, toBytes)
 
 import Basic exposing (Int6(..), charToInt6, listFromMaybeList, quadMap)
 import Bytes exposing (Bytes)
@@ -7,11 +7,11 @@ import Bytes.Encode as Encode
 
 toBytes : String -> Maybe Bytes
 toBytes string =
-    Maybe.map Encode.encode (encode string)
+    Maybe.map Encode.encode (encoder string)
 
 
-encode : String -> Maybe Encode.Encoder
-encode string =
+encoder : String -> Maybe Encode.Encoder
+encoder string =
     string
         |> stringToInts
         |> Maybe.map (List.map Encode.unsignedInt8)
