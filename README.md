@@ -8,7 +8,7 @@ but basically you can use Base64 to encode bytes in plain text.
 This package allows you to convert bytes to Base64 strings with `Base64.fromBytes`
 and convert a Base64 string to bytes with `Base64.toBytes`.
 
-[View demo](https://danfishgold.github.io/base64-bytes)
+[View demo][demo]
 
 ## Usage
 
@@ -54,13 +54,5 @@ case Base64.toBytes "SGVsbG8gV29ybGQ=" of
 
 ```
 
-## Example
-
-I've written a more complete example where the user can enter text on a web page
-and the url updates accordingly, so you can refresh the page and maintain the state.
-
-You can [see the demo][demo] or [view the source][source]
-
 [wiki]: https://en.wikipedia.org/wiki/Base64
 [demo]: https://danfishgold.github.io/base64-bytes
-[source]: https://github.com/danfishgold/base64-bytes

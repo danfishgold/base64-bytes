@@ -2,13 +2,15 @@ module Main exposing (main)
 
 import Base64
 import Browser exposing (application)
+import Browser.Dom as Dom
 import Browser.Navigation as Nav
 import Bytes
 import Bytes.Decode
 import Bytes.Encode
-import Html exposing (a, div, span, text, textarea)
-import Html.Attributes exposing (href)
+import Html exposing (a, div, h1, p, text, textarea)
+import Html.Attributes exposing (href, id, style)
 import Html.Events exposing (onInput)
+import Task
 import Url exposing (Url)
 
 
@@ -43,6 +45,7 @@ type Msg
     = SetText String
     | RequestUrl Browser.UrlRequest
     | SetUrl Url
+    | NoOp
 
 
 main =
@@ -58,14 +61,20 @@ main =
 
 init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init () url key =
-    ( { key = key
-      , urlPath = url.path
-      , text =
+    let
+        text =
             url.fragment
                 |> Maybe.map decodeUrl
                 |> Maybe.withDefault ""
+    in
+    ( { key = key
+      , urlPath = url.path
+      , text = text
       }
-    , Cmd.none
+    , Cmd.batch
+        [ Task.attempt (always NoOp) (Dom.focus "textarea")
+        , updateUrl key url.path text
+        ]
     )
 
 
@@ -84,6 +93,9 @@ update msg model =
         SetUrl url ->
             ( model, Cmd.none )
 
+        NoOp ->
+            ( model, Cmd.none )
+
 
 updateUrl : Nav.Key -> String -> String -> Cmd Msg
 updateUrl key path text =
@@ -94,17 +106,42 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "B64 Url"
     , body =
-        [ div []
-            [ text "Write text here and it will be encoded into "
-            , a [ href "https://en.wikipedia.org/wiki/Base64" ] [ text "Base64" ]
-            , text " in the URL"
+        [ div
+            [ style "font-family" "Helvetica, Arial, sans-serif"
+            , style "padding" "1vw 5vw 3vw 5vw"
             ]
-        , div []
-            [ text "Load the same URL and the encoded text will be"
-            , text "decoded back into the text field."
+            [ h1 [] [ text "danfishgold/base64-bytes Demo" ]
+            , p []
+                [ a [ href "https://github.com/danfishgold/base64-bytes/blob/master/example/src/Main.elm" ]
+                    [ text "View demo code on GitHub" ]
+                ]
+            , p []
+                [ a [ href "https://package.elm-lang.org/packages/danfishgold/base64-bytes/latest" ]
+                    [ text "View package on package.elm-lang.org" ]
+                ]
+            , p
+                []
+                [ text "Enter text below and it will be encoded into "
+                , a [ href "https://en.wikipedia.org/wiki/Base64" ] [ text "Base64" ]
+                , text " in the url. "
+                , text "Load the same url in a new tab and the encoded text will be "
+                , text "decoded back into the text field."
+                ]
             ]
         , textarea
-            [ onInput SetText ]
+            [ id "textarea"
+            , onInput SetText
+            , style "width" "70vw"
+            , style "height" "50vh"
+            , style "font-family" "Helvetica, Arial, sans-serif"
+            , style "font-size" "1em"
+            , style "padding" "5px"
+            , style "background" "#eeeeee"
+            , style "border" "none"
+            , style "display" "block"
+            , style "margin-left" "auto"
+            , style "margin-right" "auto"
+            ]
             [ text model.text ]
         ]
     }
