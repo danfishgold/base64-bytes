@@ -22,37 +22,45 @@ listFromMaybeList xs =
 
 tripleMap : (a -> Maybe a -> Maybe a -> b) -> List a -> List b
 tripleMap fn xs =
-    case xs of
-        hd :: nk :: tr :: tl ->
-            fn hd (Just nk) (Just tr) :: tripleMap fn tl
+    let
+        reverseHelper fn_ xs_ ys =
+            case xs_ of
+                hd :: nk :: tr :: tl ->
+                    reverseHelper fn_ tl (fn_ hd (Just nk) (Just tr) :: ys)
 
-        [ hd, nk ] ->
-            [ fn hd (Just nk) Nothing ]
+                [ hd, nk ] ->
+                    fn_ hd (Just nk) Nothing :: ys
 
-        [ hd ] ->
-            [ fn hd Nothing Nothing ]
+                [ hd ] ->
+                    fn_ hd Nothing Nothing :: ys
 
-        [] ->
-            []
+                [] ->
+                    ys
+    in
+    List.reverse <| reverseHelper fn xs []
 
 
 quadMap : (a -> Maybe a -> Maybe a -> Maybe a -> b) -> List a -> List b
 quadMap fn xs =
-    case xs of
-        hd :: nk :: tr :: pl :: tl ->
-            fn hd (Just nk) (Just tr) (Just pl) :: quadMap fn tl
+    let
+        reverseHelper fn_ xs_ ys =
+            case xs_ of
+                hd :: nk :: tr :: pl :: tl ->
+                    reverseHelper fn_ tl (fn_ hd (Just nk) (Just tr) (Just pl) :: ys)
 
-        [ hd, nk, tr ] ->
-            [ fn hd (Just nk) (Just tr) Nothing ]
+                [ hd, nk, tr ] ->
+                    fn_ hd (Just nk) (Just tr) Nothing :: ys
 
-        [ hd, nk ] ->
-            [ fn hd (Just nk) Nothing Nothing ]
+                [ hd, nk ] ->
+                    fn_ hd (Just nk) Nothing Nothing :: ys
 
-        [ hd ] ->
-            [ fn hd Nothing Nothing Nothing ]
+                [ hd ] ->
+                    fn_ hd Nothing Nothing Nothing :: ys
 
-        [] ->
-            []
+                [] ->
+                    ys
+    in
+    List.reverse <| reverseHelper fn xs []
 
 
 type Int6
