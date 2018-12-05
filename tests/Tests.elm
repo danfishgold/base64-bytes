@@ -45,6 +45,20 @@ suite =
             , decodeFuzz "Only the last characters can be '='" <|
                 \( ints, str ) ->
                     isValidB64String str |> Expect.equal True
+            , test "lots and lots of bytes" <|
+                \_ ->
+                    let
+                        n =
+                            1000000 * 3
+
+                        ints =
+                            List.repeat n 0
+
+                        str =
+                            String.repeat (4 * ceiling (toFloat (List.length ints) / 3)) "A"
+                    in
+                    decodeIntsToString ints
+                        |> expectJust str
             ]
         , describe "The Encode module"
             [ test "[] -> []" <|
@@ -64,6 +78,20 @@ suite =
                     str
                         |> String.length
                         |> Expect.equal (4 * ceiling (toFloat (List.length ints) / 3))
+            , test "lots and lots of bytes" <|
+                \_ ->
+                    let
+                        n =
+                            1000000 * 4
+
+                        str =
+                            String.repeat n "A"
+
+                        ints =
+                            List.repeat (n // 4 * 3) 0
+                    in
+                    encodeStringToInts str
+                        |> expectJust ints
             ]
         , describe "identities"
             [ encodeFuzz "encode >> decode == identity" <|
