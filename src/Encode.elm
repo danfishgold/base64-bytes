@@ -1,8 +1,8 @@
 module Encode exposing (encoder, toBytes)
 
-import Basic exposing (Int6(..), charToInt6, listFromMaybeList, quadMap)
-import Bytes exposing (Bytes)
-import Bytes.Encode as Encode
+import Bitwise
+import Bytes exposing (Bytes, Endianness(..))
+import Bytes.Encode as Encode exposing (Encoder)
 
 
 toBytes : String -> Maybe Bytes
@@ -12,76 +12,193 @@ toBytes string =
 
 encoder : String -> Maybe Encode.Encoder
 encoder string =
-    string
-        |> stringToInts
-        |> Maybe.map (List.map Encode.unsignedInt8)
-        |> Maybe.map Encode.sequence
+    encodeChunks string []
+        |> Maybe.map (List.reverse >> Encode.sequence)
 
 
-stringToInts : String -> Maybe (List Int)
-stringToInts string =
-    string
-        |> String.toList
-        |> quadMap fourCharsToThreeInts
-        |> listFromMaybeList
-        |> Maybe.map List.concat
+{-| Big picture:
 
+  - read 4 base64 characters
+  - convert them to 3 bytes (24 bits)
+  - encode these bytes
 
-fourCharsToThreeInts : Char -> Maybe Char -> Maybe Char -> Maybe Char -> Maybe (List Int)
-fourCharsToThreeInts a b c d =
-    case fourCharsToInt24 a b c d of
-        Nothing ->
-            Nothing
+@TODO this means the input length must be a multiple of 4. Is that too strict?
 
-        Just ( n, padding ) ->
-            let
-                b1 =
-                    n // (2 ^ 8) // (2 ^ 8) |> modBy (2 ^ 8)
+-}
+encodeChunks : String -> List Encoder -> Maybe (List Encoder)
+encodeChunks input accum =
+    {- Performance Note
 
-                b2 =
-                    n // (2 ^ 8) |> modBy (2 ^ 8)
+       slice and toList is just as fast as (possibly a little faster than) repeated `String.uncons`,
+       but this code is much more readable
+    -}
+    case String.toList (String.left 4 input) of
+        [] ->
+            Just accum
 
-                b3 =
-                    modBy (2 ^ 8) n
-            in
-            case padding of
-                None ->
-                    Just [ b1, b2, b3 ]
-
-                One ->
-                    Just [ b1, b2 ]
-
-                Two ->
-                    Just [ b1 ]
-
-
-type Padding
-    = None
-    | One
-    | Two
-
-
-fourCharsToInt24 : Char -> Maybe Char -> Maybe Char -> Maybe Char -> Maybe ( Int, Padding )
-fourCharsToInt24 a b c d =
-    case ( b, c, d ) of
-        ( Just b_, Just c_, Just d_ ) ->
-            case ( charToInt6 a, charToInt6 b_ ) of
-                ( Number n1, Number n2 ) ->
-                    case ( charToInt6 c_, charToInt6 d_ ) of
-                        ( Number n3, Number n4 ) ->
-                            Just ( n1 * 2 ^ 18 + n2 * 2 ^ 12 + n3 * 2 ^ 6 + n4, None )
-
-                        ( Number n3, Padding ) ->
-                            Just ( n1 * 2 ^ 18 + n2 * 2 ^ 12 + n3 * 2 ^ 6, One )
-
-                        ( Padding, Padding ) ->
-                            Just ( n1 * 2 ^ 18 + n2 * 2 ^ 12, Two )
-
-                        _ ->
-                            Nothing
-
-                _ ->
+        [ a, b, c, d ] ->
+            case encodeCharacters a b c d of
+                Nothing ->
                     Nothing
+
+                Just enc ->
+                    encodeChunks (String.dropLeft 4 input) (enc :: accum)
 
         _ ->
             Nothing
+
+
+{-| Convert 4 characters to 24 bits (as an Encoder)
+-}
+encodeCharacters : Char -> Char -> Char -> Char -> Maybe Encoder
+encodeCharacters a b c d =
+    {- Performance notes
+
+       We use bitshifts and other bitwise operators here. They are much faster than the alternatives.
+       This may not normally matter but this function is called a lot so even small increases
+       in efficiency are noticable
+
+       Secondly, we combine two `uint8` into one `uint16 BE`. This has no direct speed benefit
+       (elm/bytes uses a DataView, which only natively supports adding/reading uint8)
+       but having fewer list items decreases # of encoding steps and allocation,
+       and is therefore faster.
+    -}
+    if isValidChar a && isValidChar b then
+        let
+            n1 =
+                unsafeConvertChar a
+
+            n2 =
+                unsafeConvertChar b
+        in
+        -- `=` is the padding character, and must be special-cased
+        -- only the `c` and `d` char are allowed to be padding
+        case d of
+            '=' ->
+                case c of
+                    '=' ->
+                        let
+                            n =
+                                Bitwise.or
+                                    (Bitwise.shiftLeftBy 18 n1)
+                                    (Bitwise.shiftLeftBy 12 n2)
+
+                            b1 =
+                                -- masking higher bits is not needed, Encode.unsignedInt8 ignores higher bits
+                                Bitwise.shiftRightBy 16 n
+                        in
+                        Just (Encode.unsignedInt8 b1)
+
+                    _ ->
+                        if isValidChar c then
+                            let
+                                n3 =
+                                    unsafeConvertChar c
+
+                                n =
+                                    Bitwise.or
+                                        (Bitwise.or (Bitwise.shiftLeftBy 18 n1) (Bitwise.shiftLeftBy 12 n2))
+                                        (Bitwise.shiftLeftBy 6 n3)
+
+                                combined =
+                                    Bitwise.shiftRightBy 8 n
+                            in
+                            Just (Encode.unsignedInt16 BE combined)
+
+                        else
+                            Nothing
+
+            _ ->
+                if isValidChar c && isValidChar d then
+                    let
+                        n3 =
+                            unsafeConvertChar c
+
+                        n4 =
+                            unsafeConvertChar d
+
+                        n =
+                            Bitwise.or
+                                (Bitwise.or (Bitwise.shiftLeftBy 18 n1) (Bitwise.shiftLeftBy 12 n2))
+                                (Bitwise.or (Bitwise.shiftLeftBy 6 n3) n4)
+
+                        b3 =
+                            -- Masking the higher bits is not needed: Encode.unsignedInt8 ignores higher bits
+                            n
+
+                        combined =
+                            Bitwise.shiftRightBy 8 n
+                    in
+                    Just
+                        (Encode.sequence
+                            [ Encode.unsignedInt16 BE combined
+                            , Encode.unsignedInt8 b3
+                            ]
+                        )
+
+                else
+                    Nothing
+
+    else
+        Nothing
+
+
+{-| is the character a base64 digit?
+
+The base16 digits are: A-Z, a-z, 0-1, '+' and '/'
+
+-}
+isValidChar : Char -> Bool
+isValidChar c =
+    if Char.isAlphaNum c then
+        True
+
+    else
+        case c of
+            '+' ->
+                True
+
+            '/' ->
+                True
+
+            _ ->
+                False
+
+
+{-| Convert a base64 character/digit to its index
+
+See also [Wikipedia](https://en.wikipedia.org/wiki/Base64#Base64_table)
+
+-}
+unsafeConvertChar : Char -> Int
+unsafeConvertChar char =
+    {- Performance Note
+
+       Working with the key directly is faster than using e.g. `Char.isAlpha` and `Char.isUpper`
+    -}
+    let
+        key =
+            Char.toCode char
+    in
+    if key >= 65 && key <= 90 then
+        -- A-Z
+        key - 65
+
+    else if key >= 97 && key <= 122 then
+        -- a-z
+        (key - 97) + 26
+
+    else if key >= 48 && key <= 57 then
+        -- 0-9
+        (key - 48) + 26 + 26
+
+    else
+        case char of
+            '+' ->
+                62
+
+            '/' ->
+                63
+
+            _ ->
+                -1
