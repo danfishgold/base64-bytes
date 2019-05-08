@@ -38,11 +38,27 @@ encodeChunks input accum =
 
         [ a, b, c, d ] ->
             case encodeCharacters a b c d of
+                Just enc ->
+                    encodeChunks (String.dropLeft 4 input) (enc :: accum)
+
+                Nothing ->
+                    Nothing
+
+        [ a, b, c ] ->
+            case encodeCharacters a b c '=' of
                 Nothing ->
                     Nothing
 
                 Just enc ->
-                    encodeChunks (String.dropLeft 4 input) (enc :: accum)
+                    Just (enc :: accum)
+
+        [ a, b ] ->
+            case encodeCharacters a b '=' '=' of
+                Nothing ->
+                    Nothing
+
+                Just enc ->
+                    Just (enc :: accum)
 
         _ ->
             Nothing

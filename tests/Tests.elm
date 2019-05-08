@@ -67,6 +67,45 @@ suite =
             , test "AA== -> 0" <|
                 \_ ->
                     expectJust [ 0 ] (encodeStringToInts "AA==")
+            , test "AA= -> 0" <|
+                \_ ->
+                    expectJust [ 0 ] (encodeStringToInts "AA=")
+            , test "AA -> 0" <|
+                \_ ->
+                    expectJust [ 0 ] (encodeStringToInts "AA")
+            , fuzz (Fuzz.tuple ( b64Char, b64Char )) "omitted characters are treaded as padding (2 padding)" <|
+                \( c1, c2 ) ->
+                    let
+                        with2Padding =
+                            encodeStringToInts (String.fromList [ c1, c2, '=', '=' ])
+
+                        with1Padding =
+                            encodeStringToInts (String.fromList [ c1, c2, '=' ])
+
+                        withoutPadding =
+                            encodeStringToInts (String.fromList [ c1, c2 ])
+
+                        tests =
+                            [ \expected ->
+                                withoutPadding
+                                    |> Expect.equal expected
+                            , \expected ->
+                                with1Padding
+                                    |> Expect.equal expected
+                            ]
+                    in
+                    Expect.all tests with2Padding
+            , fuzz (Fuzz.tuple3 ( b64Char, b64Char, b64Char )) "omitted characters are treaded as padding (1 padding)" <|
+                \( c1, c2, c3 ) ->
+                    let
+                        withPadding =
+                            encodeStringToInts (String.fromList [ c1, c2, c3, '=' ])
+
+                        withoutPadding =
+                            encodeStringToInts (String.fromList [ c1, c2, c3 ])
+                    in
+                    withoutPadding
+                        |> Expect.equal withPadding
             , test "AQ== -> 1" <|
                 \_ ->
                     expectJust [ 1 ] (encodeStringToInts "AQ==")
