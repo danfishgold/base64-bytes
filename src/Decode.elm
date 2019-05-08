@@ -104,30 +104,18 @@ bitsToChars bits missing =
 
     -}
     let
-        x =
-            Bitwise.shiftRightBy 18 bits
-
-        y =
-            Bitwise.and (Bitwise.shiftRightBy 12 bits) lowest6BitsMask
-
-        z =
-            Bitwise.and (Bitwise.shiftRightBy 6 bits) lowest6BitsMask
-
-        w =
-            Bitwise.and bits lowest6BitsMask
-
         -- any 6-bit number is a valid base64 digit, so this is actually safe
         p =
-            unsafeToChar x
+            unsafeToChar (Bitwise.shiftRightBy 18 bits)
 
         q =
-            unsafeToChar y
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightBy 12 bits) lowest6BitsMask)
 
         r =
-            unsafeToChar z
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightBy 6 bits) lowest6BitsMask)
 
         s =
-            unsafeToChar w
+            unsafeToChar (Bitwise.and bits lowest6BitsMask)
     in
     case missing of
         2 ->
