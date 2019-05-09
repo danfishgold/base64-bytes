@@ -67,6 +67,45 @@ suite =
             , test "AA== -> 0" <|
                 \_ ->
                     expectJust [ 0 ] (encodeStringToInts "AA==")
+            , test "AA= -> 0" <|
+                \_ ->
+                    expectJust [ 0 ] (encodeStringToInts "AA=")
+            , test "AA -> 0" <|
+                \_ ->
+                    expectJust [ 0 ] (encodeStringToInts "AA")
+            , fuzz (Fuzz.tuple ( b64Char, b64Char )) "omitted characters are treaded as padding (2 padding)" <|
+                \( c1, c2 ) ->
+                    let
+                        with2Padding =
+                            encodeStringToInts (String.fromList [ c1, c2, '=', '=' ])
+
+                        with1Padding =
+                            encodeStringToInts (String.fromList [ c1, c2, '=' ])
+
+                        withoutPadding =
+                            encodeStringToInts (String.fromList [ c1, c2 ])
+
+                        tests =
+                            [ \expected ->
+                                withoutPadding
+                                    |> Expect.equal expected
+                            , \expected ->
+                                with1Padding
+                                    |> Expect.equal expected
+                            ]
+                    in
+                    Expect.all tests with2Padding
+            , fuzz (Fuzz.tuple3 ( b64Char, b64Char, b64Char )) "omitted characters are treaded as padding (1 padding)" <|
+                \( c1, c2, c3 ) ->
+                    let
+                        withPadding =
+                            encodeStringToInts (String.fromList [ c1, c2, c3, '=' ])
+
+                        withoutPadding =
+                            encodeStringToInts (String.fromList [ c1, c2, c3 ])
+                    in
+                    withoutPadding
+                        |> Expect.equal withPadding
             , test "AQ== -> 1" <|
                 \_ ->
                     expectJust [ 1 ] (encodeStringToInts "AQ==")
@@ -160,7 +199,7 @@ isValidB64String string =
 
 uint8s : Fuzzer (List Int)
 uint8s =
-    Fuzz.list <| Fuzz.map (modBy 256) <| Fuzz.int
+    Fuzz.list (Fuzz.intRange 0 255)
 
 
 fuzzerFromList : List a -> Fuzzer a
@@ -168,34 +207,45 @@ fuzzerFromList list =
     List.map Fuzz.constant list |> Fuzz.oneOf
 
 
+b64Char : Fuzzer Char
+b64Char =
+    Fuzz.frequency
+        [ ( 10, Fuzz.map Char.fromCode (Fuzz.intRange 65 90) )
+        , ( 10, Fuzz.map Char.fromCode (Fuzz.intRange 97 122) )
+        , ( 5, Fuzz.map Char.fromCode (Fuzz.intRange 48 57) )
+        , ( 1, Fuzz.constant '+' )
+        , ( 1, Fuzz.constant '/' )
+        ]
+
+
 b64String : Fuzzer String
 b64String =
-    b64Chars
-        |> List.map Fuzz.constant
-        |> Fuzz.oneOf
-        |> Fuzz.list
-        |> Fuzz.map String.fromList
-        |> Fuzz.map3
-            (\end1 end2 str ->
-                case modBy 4 (String.length str) of
-                    1 ->
-                        String.dropRight 1 str
+    let
+        inputString =
+            Fuzz.map String.fromList (Fuzz.list b64Char)
+    in
+    Fuzz.map3
+        (\end1 end2 str ->
+            case modBy 4 (String.length str) of
+                1 ->
+                    String.dropRight 1 str
 
-                    2 ->
-                        String.dropRight 1 str ++ end2 ++ "=="
+                2 ->
+                    String.dropRight 1 str ++ end2 ++ "=="
 
-                    3 ->
-                        String.dropRight 1 str ++ end1 ++ "="
+                3 ->
+                    String.dropRight 1 str ++ end1 ++ "="
 
-                    _ ->
-                        str
-            )
-            (fuzzerFromList validLastB64CharBeforeOneEquals
-                |> Fuzz.map String.fromChar
-            )
-            (fuzzerFromList validLastB64CharBeforeTwoEquals
-                |> Fuzz.map String.fromChar
-            )
+                _ ->
+                    str
+        )
+        (fuzzerFromList validLastB64CharBeforeOneEquals
+            |> Fuzz.map String.fromChar
+        )
+        (fuzzerFromList validLastB64CharBeforeTwoEquals
+            |> Fuzz.map String.fromChar
+        )
+        inputString
 
 
 
@@ -216,23 +266,22 @@ encodeStringToInts : String -> Maybe (List Int)
 encodeStringToInts str =
     let
         bytesToInts bytes =
-            D.decode (intsDecoder (Bytes.width bytes)) bytes
+            D.decode (exactly (Bytes.width bytes) D.unsignedInt8) bytes
     in
     Base64.toBytes str |> Maybe.andThen bytesToInts
 
 
-intsDecoder : Int -> D.Decoder (List Int)
-intsDecoder width =
+exactly : Int -> D.Decoder a -> D.Decoder (List a)
+exactly width elementDecoder =
     D.loop ( width, [] )
-        (\( len, ints ) ->
-            if len <= 0 then
-                D.succeed <| D.Done ( len, ints )
+        (\( remaining, accum ) ->
+            if remaining <= 0 then
+                D.succeed <| D.Done (List.reverse accum)
 
             else
-                D.unsignedInt8
-                    |> D.map (\int -> D.Loop ( len - 1, int :: ints ))
+                elementDecoder
+                    |> D.map (\v -> D.Loop ( remaining - 1, v :: accum ))
         )
-        |> D.map (Tuple.second >> List.reverse)
 
 
 
