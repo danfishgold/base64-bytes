@@ -3,7 +3,7 @@
     "name": "danfishgold/base64-bytes",
     "summary": "Convert between Base64 strings and bytes",
     "license": "BSD-3-Clause",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "exposed-modules": [
         "Base64"
     ],

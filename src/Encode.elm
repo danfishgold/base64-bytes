@@ -22,8 +22,6 @@ encoder string =
   - convert them to 3 bytes (24 bits)
   - encode these bytes
 
-@TODO this means the input length must be a multiple of 4. Is that too strict?
-
 -}
 encodeChunks : String -> List Encoder -> Maybe (List Encoder)
 encodeChunks input accum =
