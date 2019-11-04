@@ -12,7 +12,7 @@ fromBytes bytes =
 
 decoder : Int -> Decode.Decoder String
 decoder width =
-    Decode.loop ( width, "" ) loopHelp
+    Decode.loop { remaining = width, string = "" } loopHelp
 
 
 
@@ -33,58 +33,18 @@ so at the end of the string some characters can be omitted.
 This means there may be 2 or 1 byte remaining at the end. We have to cover those cases!
 
 -}
-loopHelp : ( Int, String ) -> Decode.Decoder (Decode.Step ( Int, String ) String)
-loopHelp ( remaining, string ) =
-    {- Performance Notes
-
-       the elm/bytes package uses a DataView under the hood.
-       These only allow reading/writing uint8, so there is no gain in decoding a uint16 here
-    -}
+loopHelp : { remaining : Int, string : String } -> Decode.Decoder (Decode.Step { remaining : Int, string : String } String)
+loopHelp { remaining, string } =
     if remaining >= 18 then
-        let
-            helper a b c d e =
-                let
-                    combined1 =
-                        Bitwise.shiftRightZfBy 8 a
-
-                    combined2 =
-                        Bitwise.or
-                            (Bitwise.and 0xFF a |> Bitwise.shiftLeftBy 16)
-                            (Bitwise.shiftRightZfBy 16 b)
-
-                    combined3 =
-                        Bitwise.or
-                            (Bitwise.and 0xFFFF b |> Bitwise.shiftLeftBy 8)
-                            (Bitwise.shiftRightZfBy 24 c)
-
-                    combined4 =
-                        Bitwise.and 0x00FFFFFF c
-
-                    combined5 =
-                        Bitwise.shiftRightZfBy 8 d
-
-                    combined6 =
-                        Bitwise.or
-                            (Bitwise.and 0xFF d |> Bitwise.shiftLeftBy 16)
-                            e
-                in
-                Decode.Loop
-                    ( remaining - 18
-                    , string
-                        ++ bitsToChars combined1 0
-                        ++ bitsToChars combined2 0
-                        ++ bitsToChars combined3 0
-                        ++ bitsToChars combined4 0
-                        ++ bitsToChars combined5 0
-                        ++ bitsToChars combined6 0
-                    )
-        in
-        Decode.map5 helper
-            (Decode.unsignedInt32 Bytes.BE)
-            (Decode.unsignedInt32 Bytes.BE)
-            (Decode.unsignedInt32 Bytes.BE)
-            (Decode.unsignedInt32 Bytes.BE)
-            (Decode.unsignedInt16 Bytes.BE)
+        -- Note: this case is heavily optimized. To understand what happens, look at the case `remaining >= 3` below.
+        decode18Bytes
+            |> Decode.map
+                (\result ->
+                    Decode.Loop
+                        { remaining = remaining - 18
+                        , string = string ++ result
+                        }
+                )
 
     else if remaining >= 3 then
         let
@@ -94,9 +54,9 @@ loopHelp ( remaining, string ) =
                         Bitwise.or (Bitwise.or (Bitwise.shiftLeftBy 16 a) (Bitwise.shiftLeftBy 8 b)) c
                 in
                 Decode.Loop
-                    ( remaining - 3
-                    , string ++ bitsToChars combined 0
-                    )
+                    { remaining = remaining - 3
+                    , string = string ++ bitsToChars combined 0
+                    }
         in
         Decode.map3 helper
             Decode.unsignedInt8
@@ -152,18 +112,21 @@ bitsToChars bits missing =
     let
         -- any 6-bit number is a valid base64 digit, so this is actually safe
         p =
-            unsafeToChar (Bitwise.shiftRightBy 18 bits)
+            unsafeToChar (Bitwise.shiftRightZfBy 18 bits)
 
         q =
-            unsafeToChar (Bitwise.and (Bitwise.shiftRightBy 12 bits) lowest6BitsMask)
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightZfBy 12 bits) lowest6BitsMask)
 
         r =
-            unsafeToChar (Bitwise.and (Bitwise.shiftRightBy 6 bits) lowest6BitsMask)
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightZfBy 6 bits) lowest6BitsMask)
 
         s =
             unsafeToChar (Bitwise.and bits lowest6BitsMask)
     in
     case missing of
+        0 ->
+            String.cons p (String.cons q (String.cons r (String.fromChar s)))
+
         2 ->
             String.cons p (String.cons q "==")
 
@@ -171,7 +134,7 @@ bitsToChars bits missing =
             String.cons p (String.cons q (String.cons r "="))
 
         _ ->
-            String.cons p (String.cons q (String.cons r (String.fromChar s)))
+            ""
 
 
 {-| Base64 index to character/digit
@@ -197,3 +160,124 @@ unsafeToChar n =
 
             _ ->
                 '\u{0000}'
+
+
+
+-- OPTIMIZED VERSION
+
+
+u32BE : Decode.Decoder Int
+u32BE =
+    Decode.unsignedInt32 Bytes.BE
+
+
+u16BE : Decode.Decoder Int
+u16BE =
+    Decode.unsignedInt16 Bytes.BE
+
+
+{-| A specialized version reading 18 bytes at once
+
+This tries to take the biggest step possible within a `Decode.loop` iteration.
+There is also some manual inlining to limit the number of function calls.
+
+-}
+decode18Bytes : Decode.Decoder String
+decode18Bytes =
+    Decode.map5 decode18Help
+        u32BE
+        u32BE
+        u32BE
+        u32BE
+        u16BE
+
+
+decode18Help : Int -> Int -> Int -> Int -> Int -> String
+decode18Help a b c d e =
+    let
+        combined1 =
+            Bitwise.shiftRightZfBy 8 a
+
+        combined2 =
+            Bitwise.or
+                (Bitwise.and 0xFF a |> Bitwise.shiftLeftBy 16)
+                (Bitwise.shiftRightZfBy 16 b)
+
+        combined3 =
+            Bitwise.or
+                (Bitwise.and 0xFFFF b |> Bitwise.shiftLeftBy 8)
+                (Bitwise.shiftRightZfBy 24 c)
+
+        combined4 =
+            Bitwise.and 0x00FFFFFF c
+
+        combined5 =
+            Bitwise.shiftRightZfBy 8 d
+
+        combined6 =
+            Bitwise.or
+                (Bitwise.and 0xFF d |> Bitwise.shiftLeftBy 16)
+                e
+    in
+    ""
+        |> bitsToCharsSpec combined6 combined5 combined4
+        |> bitsToCharsSpec combined3 combined2 combined1
+
+
+bitsToCharsSpec : Int -> Int -> Int -> String -> String
+bitsToCharsSpec bits1 bits2 bits3 accum =
+    -- Performance: prevent calls to `bitsToChar`. The overhead of function calls
+    -- became significant. This also allows more efficient string creation using String.cons
+    let
+        -- any 6-bit number is a valid base64 digit, so this is actually safe
+        p =
+            unsafeToChar (Bitwise.shiftRightZfBy 18 bits1)
+
+        q =
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightZfBy 12 bits1) lowest6BitsMask)
+
+        r =
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightZfBy 6 bits1) lowest6BitsMask)
+
+        s =
+            unsafeToChar (Bitwise.and bits1 lowest6BitsMask)
+    in
+    let
+        a =
+            unsafeToChar (Bitwise.shiftRightZfBy 18 bits2)
+
+        b =
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightZfBy 12 bits2) lowest6BitsMask)
+
+        c =
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightZfBy 6 bits2) lowest6BitsMask)
+
+        d =
+            unsafeToChar (Bitwise.and bits2 lowest6BitsMask)
+    in
+    let
+        x =
+            unsafeToChar (Bitwise.shiftRightZfBy 18 bits3)
+
+        y =
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightZfBy 12 bits3) lowest6BitsMask)
+
+        z =
+            unsafeToChar (Bitwise.and (Bitwise.shiftRightZfBy 6 bits3) lowest6BitsMask)
+
+        w =
+            unsafeToChar (Bitwise.and bits3 lowest6BitsMask)
+    in
+    accum
+        |> String.cons s
+        |> String.cons r
+        |> String.cons q
+        |> String.cons p
+        |> String.cons d
+        |> String.cons c
+        |> String.cons b
+        |> String.cons a
+        |> String.cons w
+        |> String.cons z
+        |> String.cons y
+        |> String.cons x
