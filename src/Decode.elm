@@ -40,7 +40,53 @@ loopHelp ( remaining, string ) =
        the elm/bytes package uses a DataView under the hood.
        These only allow reading/writing uint8, so there is no gain in decoding a uint16 here
     -}
-    if remaining >= 3 then
+    if remaining >= 18 then
+        let
+            helper a b c d e =
+                let
+                    combined1 =
+                        Bitwise.shiftRightZfBy 8 a
+
+                    combined2 =
+                        Bitwise.or
+                            (Bitwise.and 0xFF a |> Bitwise.shiftLeftBy 16)
+                            (Bitwise.shiftRightZfBy 16 b)
+
+                    combined3 =
+                        Bitwise.or
+                            (Bitwise.and 0xFFFF b |> Bitwise.shiftLeftBy 8)
+                            (Bitwise.shiftRightZfBy 24 c)
+
+                    combined4 =
+                        Bitwise.and 0x00FFFFFF c
+
+                    combined5 =
+                        Bitwise.shiftRightZfBy 8 d
+
+                    combined6 =
+                        Bitwise.or
+                            (Bitwise.and 0xFF d |> Bitwise.shiftLeftBy 16)
+                            e
+                in
+                Decode.Loop
+                    ( remaining - 18
+                    , string
+                        ++ bitsToChars combined1 0
+                        ++ bitsToChars combined2 0
+                        ++ bitsToChars combined3 0
+                        ++ bitsToChars combined4 0
+                        ++ bitsToChars combined5 0
+                        ++ bitsToChars combined6 0
+                    )
+        in
+        Decode.map5 helper
+            (Decode.unsignedInt32 Bytes.BE)
+            (Decode.unsignedInt32 Bytes.BE)
+            (Decode.unsignedInt32 Bytes.BE)
+            (Decode.unsignedInt32 Bytes.BE)
+            (Decode.unsignedInt16 Bytes.BE)
+
+    else if remaining >= 3 then
         let
             helper a b c =
                 let
