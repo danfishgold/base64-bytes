@@ -22,7 +22,7 @@ decoder width =
 {-| Base64 uses 6 bits per digit (because 2^6 == 64)
 and can nicely store 4 digits in 24 bits, which are 3 bytes.
 
-The decoding process is thus roughly
+The decoding process is thus roughly:
 
   - read a 3-byte chunk
   - extract the 4 6-bit segments
@@ -30,7 +30,7 @@ The decoding process is thus roughly
 
 But the input does not need to have a multiple of 4 characters,
 so at the end of the string some characters can be omitted.
-This means there may be 2 or 1 byte remaining at the end. We have to cover those cases!
+This means there may be 2 or 1 bytes remaining at the end. We have to cover those cases!
 
 -}
 loopHelp : { remaining : Int, string : String } -> Decode.Decoder (Decode.Step { remaining : Int, string : String } String)
@@ -104,6 +104,7 @@ bitsToChars bits missing =
     {- Performance Notes
 
        `String.cons` proved to be the fastest way of combining characters into a string
+       see also https://github.com/danfishgold/base64-bytes/pull/3#discussion_r342321940
 
        The input is 24 bits, which we have to partition into 4 6-bit segments. We achieve this by
        shifting to the right by (a multiple of) 6 to remove unwanted bits on the right, then `Bitwise.and`
@@ -186,8 +187,11 @@ u16BE =
 To get a better understanding of what this code does, read the `remainder >= 3` case above.
 
 This tries to take the biggest step possible within a `Decode.loop` iteration.
-The idea is similar to loop-unrolling in languages like c, but `Decode.loop` also requires that
-the accumulator is wrapped in a `Step a b`. So decoding as much as possible makes sense.
+The idea is similar to loop-unrolling in languages like c: avoiding jumps gives better performance
+
+But `Decode.loop` also requires that the accumulator is wrapped in a `Step a b`, i.e. it allocates a `Decode.Loop _`
+for every iteration. Allocation is expensive in tight loops like this one. So there is a double reason to limit the number
+of iterations: avoiding jumps and avoiding allocation.
 
 Given that `Decode.map5` is the highest one defined by `elm/bytes` and we need a multiple of 3 bytes,
 `4 * 4 + 2 = 18` is the best we can do.
@@ -235,6 +239,7 @@ decode18Help a b c d e =
                 (Bitwise.and 0xFF d |> Bitwise.shiftLeftBy 16)
                 e
     in
+    -- the order is counter-intuitive because `String.cons` is used in bitsToCharSpecialized.
     ""
         |> bitsToCharSpecialized combined6 combined5 combined4
         |> bitsToCharSpecialized combined3 combined2 combined1
@@ -248,9 +253,8 @@ overhead of function calls -- something we normally don't really think about -- 
 -}
 bitsToCharSpecialized : Int -> Int -> Int -> String -> String
 bitsToCharSpecialized bits1 bits2 bits3 accum =
-    -- the `let ... in let ...` is used to visually separate the processing of the 3 24-bit integers
-    -- these compile away completely.
     let
+        -- BITS 1
         p =
             unsafeToChar (Bitwise.shiftRightZfBy 18 bits1)
 
@@ -262,8 +266,8 @@ bitsToCharSpecialized bits1 bits2 bits3 accum =
 
         s =
             unsafeToChar (Bitwise.and bits1 lowest6BitsMask)
-    in
-    let
+
+        -- BITS 2
         a =
             unsafeToChar (Bitwise.shiftRightZfBy 18 bits2)
 
@@ -275,8 +279,8 @@ bitsToCharSpecialized bits1 bits2 bits3 accum =
 
         d =
             unsafeToChar (Bitwise.and bits2 lowest6BitsMask)
-    in
-    let
+
+        -- BITS 3
         x =
             unsafeToChar (Bitwise.shiftRightZfBy 18 bits3)
 
