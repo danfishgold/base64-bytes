@@ -16,21 +16,13 @@ import Url exposing (Url)
 
 encodeUrl : String -> String
 encodeUrl text =
-    Bytes.Encode.string text
-        |> Bytes.Encode.encode
-        |> Base64.fromBytes
+    Base64.fromString
         |> Maybe.withDefault ""
 
 
 decodeUrl : String -> String
 decodeUrl url =
-    Base64.toBytes url
-        |> Maybe.andThen
-            (\bytes ->
-                Bytes.Decode.decode
-                    (Bytes.Decode.string (Bytes.width bytes))
-                    bytes
-            )
+    Base64.toString url
         |> Maybe.withDefault ""
 
 
