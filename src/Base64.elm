@@ -1,5 +1,5 @@
 module Base64 exposing
-    ( fromBytes, toBytes
+    ( fromBytes, fromString, toBytes, toString
     , encoder, decoder
     )
 
@@ -10,7 +10,7 @@ to Base64 strings and vice versa.
 
 # Conversion
 
-@docs fromBytes, toBytes
+@docs fromBytes, fromString, toBytes, toString
 
 
 # Bytes Encoder and Decoder
@@ -44,6 +44,21 @@ fromBytes =
     Decode.fromBytes
 
 
+{-| Encode a string into a Base64 string.
+This function is a wrapper around [`fromBytes`](#fromBytes).
+
+Similarly, it should never return `Nothing`, but alas, [`Bytes.Decode.decode`](https://package.elm-lang.org/packages/elm/bytes/latest/Bytes-Decode#decode),
+which [`fromBytes`](#fromBytes) uses, returns a `Maybe String`.
+
+-}
+fromString : String -> Maybe String
+fromString string =
+    string
+        |> Bytes.Encode.string
+        |> Bytes.Encode.encode
+        |> fromBytes
+
+
 {-| Convert a Base64 string to bytes.
 If you want more control over the process, you should use [`encoder`](#encoder).
 
@@ -53,6 +68,24 @@ This function fails (returns `Nothing`) if you give it an invalid Base64 sequenc
 toBytes : String -> Maybe Bytes
 toBytes =
     Encode.toBytes
+
+
+{-| Decode a Base64 string into a string.
+This function is a wrapper around [`toBytes`](#toBytes).
+
+It will fail (return `Nothing`) if you give it an invalid Base64 sequence.
+
+-}
+toString : String -> Maybe String
+toString b64String =
+    case toBytes b64String of
+        Nothing ->
+            Nothing
+
+        Just b64Bytes ->
+            Bytes.Decode.decode
+                (Bytes.Decode.string (Bytes.width b64Bytes))
+                b64Bytes
 
 
 {-| `decoder width` is a bytes decoder that will convert `width` bytes into a
